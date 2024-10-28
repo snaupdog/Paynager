@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:easy_sms_receiver/easy_sms_receiver.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -14,7 +15,16 @@ class _MyHomePageState extends State<MyHomePage> {
   final EasySmsReceiver easySmsReceiver = EasySmsReceiver.instance;
   final FlutterLocalNotificationsPlugin notificationsPlugin =
       FlutterLocalNotificationsPlugin();
-  String _messageText = "Waiting for SMS...";
+  String messageText = "Waiting for SMS...";
+  String label = "No_label";
+  final List<String> buttonnames = [
+    "Snacks",
+    "Swiggy",
+    "stationary",
+    "grocery"
+        "people"
+  ];
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
@@ -22,6 +32,21 @@ class _MyHomePageState extends State<MyHomePage> {
     _initializeNotifications();
     _requestPermissions();
     _startListeningForSms();
+  }
+
+  /// Function to add a user to Firestore
+  Future<void> _addtodatabase() async {
+    final transaction = <String, dynamic>{
+      "message": messageText,
+      "label": label,
+    };
+
+    try {
+      final doc = await firestore.collection("transaction").add(transaction);
+      print('DocumentSnapshot added with ID: ${doc.id}');
+    } catch (e) {
+      print('Error adding document: $e');
+    }
   }
 
   Future<void> _initializeNotifications() async {
@@ -47,10 +72,19 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _startListeningForSms() {
     easySmsReceiver.listenIncomingSms(onNewMessage: (message) {
-      setState(() {
-        _messageText = message.body ?? "No content";
-      });
-      _showNotification("New SMS", message.body ?? "No content");
+      String messageBody = message.body ?? "No content";
+
+      // Filter messages that contain "HDFC"
+      if (messageBody.contains("HDFC")) {
+        setState(() {
+          messageText = messageBody;
+        });
+
+        // Show notification for HDFC messages
+        _showNotification("New HDFC SMS", messageBody);
+      } else {
+        print('Non-HDFC message received: $messageBody');
+      }
     });
   }
 
@@ -76,15 +110,91 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        child: const Text("add Label"),
+        onPressed: () {
+          addLabelDialog();
+        },
+      ),
       appBar: AppBar(title: const Text("SMS Receiver")),
-      body: Center(
-        child: Text(
-          _messageText,
-          style: const TextStyle(fontSize: 18),
-          textAlign: TextAlign.center,
-        ),
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // SMS Message Display
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              messageText,
+              style: const TextStyle(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Horizontal Scrolling List of Buttons
+          SizedBox(
+            height: 60, // Height of the button container
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal, // Horizontal scrolling
+              itemCount: buttonnames.length, // Number of buttons
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      label = buttonnames[index];
+                      print('Button ${buttonnames[index]} pressed');
+                    },
+                    child: Text(buttonnames[index]),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(
+            height: 40,
+          ),
+          ElevatedButton(
+              onPressed: () async {
+                await _addtodatabase();
+                setState(() {
+                  messageText = " ... ";
+                });
+              },
+              child: const Text("Submit"))
+        ],
       ),
     );
   }
 
+  Future<String?> addLabelDialog() async {
+    String? label;
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Enter Label'),
+          content: TextField(
+            onChanged: (value) {
+              label = value;
+            },
+            decoration: const InputDecoration(hintText: "Label"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  if (label != null && label!.isNotEmpty) {
+                    buttonnames
+                        .add(label!); // Use label! to assert it's non-null
+                  }
+                });
+                Navigator.of(context).pop(label);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

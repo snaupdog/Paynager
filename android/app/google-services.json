@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "785798437025",
+    "project_id": "testes-b467b",
+    "storage_bucket": "testes-b467b.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:785798437025:android:fe3c291e5f6898447478e0",
+        "android_client_info": {
+          "package_name": "com.example.paynager"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqJD4qWjxFcXWZ7bthdSeZmAIXIYB5H5Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
