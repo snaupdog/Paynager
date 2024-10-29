@@ -18,6 +18,8 @@ class _MyHomePageState extends State<MyHomePage> {
   final EasySmsReceiver easySmsReceiver = EasySmsReceiver.instance;
   final FlutterLocalNotificationsPlugin notificationsPlugin =
       FlutterLocalNotificationsPlugin();
+  final TextEditingController noteController =
+      TextEditingController(); // Note field
   String messageText = "Waiting for SMS...";
   String label = "";
   String? amount = "";
@@ -51,6 +53,9 @@ class _MyHomePageState extends State<MyHomePage> {
       "recipient": recipient,
       "date": date,
       "refNumber": refNumber,
+      "note": noteController.text.isNotEmpty
+          ? noteController.text
+          : null, // Optional field
     };
 
     try {
@@ -218,6 +223,17 @@ class _MyHomePageState extends State<MyHomePage> {
               },
             ),
           ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.all(40.0),
+            child: TextField(
+              controller: noteController, // Note input field
+              decoration: const InputDecoration(
+                labelText: "Add a Note",
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
           const SizedBox(height: 40),
           ElevatedButton(
             onPressed: () async {
@@ -227,6 +243,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   messageText = "Submitted to Database!";
                   label = "";
                 });
+                noteController.clear();
               } else {
                 setState(() {
                   messageText = "Cannot submit without SMS";
