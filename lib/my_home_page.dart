@@ -1,8 +1,11 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:easy_sms_receiver/easy_sms_receiver.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:core';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -17,6 +20,11 @@ class _MyHomePageState extends State<MyHomePage> {
       FlutterLocalNotificationsPlugin();
   String messageText = "Waiting for SMS...";
   String label = "";
+  String? amount = "";
+  String? recipient = "";
+  String? date = "";
+  String? refNumber = "";
+
   final List<String> buttonnames = [
     "Snacks",
     "Swiggy",
@@ -39,6 +47,10 @@ class _MyHomePageState extends State<MyHomePage> {
     final transaction = <String, dynamic>{
       "message": messageText,
       "label": label,
+      "amount": amount,
+      "recipient": recipient,
+      "date": date,
+      "refNumber": refNumber,
     };
 
     try {
@@ -70,16 +82,36 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  void extractinfo(String msg) async {
+    // Regular expressions to extract data
+    RegExp amountReg = RegExp(r'rs\.(\d+(\.\d{1,2})?)', caseSensitive: false);
+    RegExp recipientReg = RegExp(r'to ([a-z ]+)');
+    RegExp dateReg = RegExp(r'on (\d{2}-\d{2}(?:-\d{4})?)');
+    RegExp refNumberReg = RegExp(r'ref (\d+)');
+
+// Extracting data
+    amount = amountReg.firstMatch(msg)?.group(1);
+    recipient = recipientReg.firstMatch(msg)?.group(1);
+    date = dateReg.firstMatch(msg)?.group(1);
+    refNumber = refNumberReg.firstMatch(msg)?.group(1);
+    // Printing extracted data
+    print('Amount: Rs.$amount');
+    print('Recipient: $recipient');
+    print('Date: $date');
+    print('Reference Number: $refNumber');
+  }
+
   void _startListeningForSms() {
     easySmsReceiver.listenIncomingSms(onNewMessage: (message) {
       String messageBody = message.body ?? "No content";
 
       if (messageBody.contains("HDFC")) {
         setState(() {
-          messageText = messageBody;
+          messageText = messageBody.toLowerCase();
         });
+        extractinfo(messageText);
 
-        _showNotification("New HDFC SMS", messageBody);
+        _showNotification("Yo put a label to this shiz pls", messageBody);
       } else {
         print('Non-HDFC message received: $messageBody');
       }
