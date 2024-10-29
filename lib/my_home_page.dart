@@ -16,13 +16,14 @@ class _MyHomePageState extends State<MyHomePage> {
   final FlutterLocalNotificationsPlugin notificationsPlugin =
       FlutterLocalNotificationsPlugin();
   String messageText = "Waiting for SMS...";
-  String label = "No_label";
+  String label = "";
   final List<String> buttonnames = [
     "Snacks",
     "Swiggy",
     "stationary",
-    "grocery"
-        "people"
+    "grocery",
+    "people",
+    "travel"
   ];
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
@@ -121,6 +122,15 @@ class _MyHomePageState extends State<MyHomePage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // SMS Message Display
+
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
@@ -132,7 +142,8 @@ class _MyHomePageState extends State<MyHomePage> {
           const SizedBox(height: 20),
           // Horizontal Scrolling List of Buttons
           SizedBox(
-            height: 60, // Height of the button container
+            height: 50, // Height of the button container
+
             child: ListView.builder(
               scrollDirection: Axis.horizontal, // Horizontal scrolling
               itemCount: buttonnames.length, // Number of buttons
@@ -141,7 +152,9 @@ class _MyHomePageState extends State<MyHomePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: ElevatedButton(
                     onPressed: () {
-                      label = buttonnames[index];
+                      setState(() {
+                        label = buttonnames[index];
+                      });
                       print('Button ${buttonnames[index]} pressed');
                     },
                     child: Text(buttonnames[index]),
@@ -155,9 +168,20 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
           ElevatedButton(
               onPressed: () async {
-                await _addtodatabase();
-                setState(() {
-                  messageText = " ... ";
+                if (messageText.isNotEmpty) {
+                  await _addtodatabase();
+                  setState(() {
+                    messageText = "Submitted to Database!";
+                    label = "";
+                  });
+                } else {
+                  messageText = "Cannot submit without sms";
+                }
+                Future.delayed(const Duration(seconds: 2), () {
+                  setState(() {
+                    label = "";
+                    messageText = "Waiting for SMS...";
+                  });
                 });
               },
               child: const Text("Submit"))
@@ -173,11 +197,17 @@ class _MyHomePageState extends State<MyHomePage> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Enter Label'),
-          content: TextField(
-            onChanged: (value) {
-              label = value;
-            },
-            decoration: const InputDecoration(hintText: "Label"),
+          content: SingleChildScrollView(
+            child: Column(
+              children: [
+                TextField(
+                  onChanged: (value) {
+                    label = value;
+                  },
+                  decoration: const InputDecoration(hintText: "Label"),
+                ),
+              ],
+            ),
           ),
           actions: <Widget>[
             TextButton(
