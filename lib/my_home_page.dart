@@ -35,7 +35,6 @@ class _MyHomePageState extends State<MyHomePage> {
     _startListeningForSms();
   }
 
-  /// Function to add a user to Firestore
   Future<void> _addtodatabase() async {
     final transaction = <String, dynamic>{
       "message": messageText,
@@ -75,13 +74,11 @@ class _MyHomePageState extends State<MyHomePage> {
     easySmsReceiver.listenIncomingSms(onNewMessage: (message) {
       String messageBody = message.body ?? "No content";
 
-      // Filter messages that contain "HDFC"
       if (messageBody.contains("HDFC")) {
         setState(() {
           messageText = messageBody;
         });
 
-        // Show notification for HDFC messages
         _showNotification("New HDFC SMS", messageBody);
       } else {
         print('Non-HDFC message received: $messageBody');
@@ -92,19 +89,44 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _showNotification(String title, String body) async {
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'sms_channel', // Channel ID
-      'SMS Notifications', // Channel name
+      'sms_channel',
+      'SMS Notifications',
       importance: Importance.high,
       priority: Priority.high,
     );
     const NotificationDetails notificationDetails =
         NotificationDetails(android: androidDetails);
 
-    await notificationsPlugin.show(
-      0, // Notification ID
-      title,
-      body,
-      notificationDetails,
+    await notificationsPlugin.show(0, title, body, notificationDetails);
+  }
+
+  Future<void> _showDeleteDialog(int index) async {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Button'),
+          content:
+              Text('Are you sure you want to delete "${buttonnames[index]}"?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  buttonnames.removeAt(index);
+                });
+                Navigator.of(context).pop();
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -112,7 +134,7 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       floatingActionButton: FloatingActionButton(
-        child: const Text("add Label"),
+        child: const Text("Add Label"),
         onPressed: () {
           addLabelDialog();
         },
@@ -121,8 +143,6 @@ class _MyHomePageState extends State<MyHomePage> {
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // SMS Message Display
-
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
@@ -140,51 +160,55 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
           const SizedBox(height: 20),
-          // Horizontal Scrolling List of Buttons
           SizedBox(
-            height: 50, // Height of the button container
-
+            height: 50,
             child: ListView.builder(
-              scrollDirection: Axis.horizontal, // Horizontal scrolling
-              itemCount: buttonnames.length, // Number of buttons
+              scrollDirection: Axis.horizontal,
+              itemCount: buttonnames.length,
               itemBuilder: (context, index) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        label = buttonnames[index];
-                      });
-                      print('Button ${buttonnames[index]} pressed');
+                  child: GestureDetector(
+                    onLongPress: () {
+                      _showDeleteDialog(index);
                     },
-                    child: Text(buttonnames[index]),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          label = buttonnames[index];
+                        });
+                        print('Button ${buttonnames[index]} pressed');
+                      },
+                      child: Text(buttonnames[index]),
+                    ),
                   ),
                 );
               },
             ),
           ),
-          const SizedBox(
-            height: 40,
-          ),
+          const SizedBox(height: 40),
           ElevatedButton(
-              onPressed: () async {
-                if (messageText.isNotEmpty) {
-                  await _addtodatabase();
-                  setState(() {
-                    messageText = "Submitted to Database!";
-                    label = "";
-                  });
-                } else {
-                  messageText = "Cannot submit without sms";
-                }
-                Future.delayed(const Duration(seconds: 2), () {
-                  setState(() {
-                    label = "";
-                    messageText = "Waiting for SMS...";
-                  });
+            onPressed: () async {
+              if (messageText != "Waiting for SMS...") {
+                await _addtodatabase();
+                setState(() {
+                  messageText = "Submitted to Database!";
+                  label = "";
                 });
-              },
-              child: const Text("Submit"))
+              } else {
+                setState(() {
+                  messageText = "Cannot submit without SMS";
+                });
+              }
+              Future.delayed(const Duration(seconds: 2), () {
+                setState(() {
+                  label = "";
+                  messageText = "Waiting for SMS...";
+                });
+              });
+            },
+            child: const Text("Submit"),
+          ),
         ],
       ),
     );
@@ -214,8 +238,7 @@ class _MyHomePageState extends State<MyHomePage> {
               onPressed: () {
                 setState(() {
                   if (label != null && label!.isNotEmpty) {
-                    buttonnames
-                        .add(label!); // Use label! to assert it's non-null
+                    buttonnames.add(label!);
                   }
                 });
                 Navigator.of(context).pop(label);
