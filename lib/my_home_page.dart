@@ -1,4 +1,6 @@
 // ignore_for_file: avoid_print
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:easy_sms_receiver/easy_sms_receiver.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -16,6 +18,8 @@ class _MyHomePageState extends State<MyHomePage> {
   final EasySmsReceiver easySmsReceiver = EasySmsReceiver.instance;
   final FlutterLocalNotificationsPlugin notificationsPlugin =
       FlutterLocalNotificationsPlugin();
+
+  FirebaseFirestore? firestore;
 
   final TextEditingController noteController = TextEditingController();
 
@@ -35,14 +39,26 @@ class _MyHomePageState extends State<MyHomePage> {
     "Travel"
   ];
 
-  final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  bool get firebaseSupported => Platform.isAndroid || Platform.isIOS;
+  bool get smsSupported => Platform.isAndroid;
+  bool get notificationsSupported => Platform.isAndroid || Platform.isIOS;
 
   @override
   void initState() {
     super.initState();
-    _initializeNotifications();
-    _requestPermissions();
-    _startListeningForSms();
+
+    if (firebaseSupported) {
+      firestore = FirebaseFirestore.instance;
+    }
+
+    if (notificationsSupported) {
+      _initializeNotifications();
+    }
+
+    if (smsSupported) {
+      _requestPermissions();
+      _startListeningForSms();
+    }
   }
 
   // ---------------- NOTIFICATIONS ----------------
@@ -60,11 +76,17 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> _showNotification(String title, String body) async {
+    if (!notificationsSupported) return;
+
     const androidDetails = AndroidNotificationDetails(
       'sms_channel',
       'SMS Alerts',
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.max,
+      priority: Priority.max,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.call,
+      ticker: 'ticker',
+      visibility: NotificationVisibility.public,
     );
 
     const notificationDetails = NotificationDetails(android: androidDetails);
@@ -80,6 +102,8 @@ class _MyHomePageState extends State<MyHomePage> {
   // ---------------- PERMISSIONS ----------------
 
   Future<void> _requestPermissions() async {
+    if (!smsSupported) return;
+
     await Permission.sms.request();
     await Permission.notification.request();
   }
@@ -105,6 +129,8 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _startListeningForSms() {
+    if (!smsSupported) return;
+
     easySmsReceiver.listenIncomingSms(
       onNewMessage: (message) async {
         final messageBody = message.body ?? "";
@@ -123,6 +149,11 @@ class _MyHomePageState extends State<MyHomePage> {
   // ---------------- FIRESTORE ----------------
 
   Future<void> _addtodatabase() async {
+    if (firestore == null) {
+      print("Firestore not available on this platform");
+      return;
+    }
+
     final transaction = <String, dynamic>{
       "message": messageText,
       "label": label,
@@ -135,7 +166,7 @@ class _MyHomePageState extends State<MyHomePage> {
     };
 
     try {
-      await firestore.collection("transaction").add(transaction);
+      await firestore!.collection("transaction").add(transaction);
       print('Saved to Firestore');
     } catch (e) {
       print('Firestore error: $e');
@@ -147,7 +178,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("SMS Transaction Logger")),
+      appBar: AppBar(title: const Text("Paynager")),
       floatingActionButton: FloatingActionButton(
         child: const Text("Add"),
         onPressed: () => addLabelDialog(),
@@ -164,6 +195,14 @@ class _MyHomePageState extends State<MyHomePage> {
               textAlign: TextAlign.center,
             ),
           ),
+          if (!smsSupported)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Text(
+                "SMS reading is disabled on desktop",
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
           const SizedBox(height: 20),
           SizedBox(
             height: 50,
