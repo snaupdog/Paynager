@@ -1,14 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:paynager/my_home_page.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:paynager/my_home_page.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // Ensures binding for async tasks
-
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
   runApp(const MyApp());
 }
 

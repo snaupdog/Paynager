@@ -1,11 +1,9 @@
 // ignore_for_file: avoid_print
-
 import 'package:flutter/material.dart';
 import 'package:easy_sms_receiver/easy_sms_receiver.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:core';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -18,8 +16,9 @@ class _MyHomePageState extends State<MyHomePage> {
   final EasySmsReceiver easySmsReceiver = EasySmsReceiver.instance;
   final FlutterLocalNotificationsPlugin notificationsPlugin =
       FlutterLocalNotificationsPlugin();
-  final TextEditingController noteController =
-      TextEditingController(); // Note field
+
+  final TextEditingController noteController = TextEditingController();
+
   String messageText = "Waiting for SMS...";
   String label = "";
   String? amount = "";
@@ -30,11 +29,12 @@ class _MyHomePageState extends State<MyHomePage> {
   final List<String> buttonnames = [
     "Snacks",
     "Swiggy",
-    "stationary",
-    "grocery",
-    "people",
-    "travel"
+    "Stationary",
+    "Grocery",
+    "People",
+    "Travel"
   ];
+
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
   @override
@@ -45,6 +45,83 @@ class _MyHomePageState extends State<MyHomePage> {
     _startListeningForSms();
   }
 
+  // ---------------- NOTIFICATIONS ----------------
+
+  Future<void> _initializeNotifications() async {
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    const initSettings = InitializationSettings(android: androidSettings);
+
+    await notificationsPlugin.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: (response) {},
+    );
+  }
+
+  Future<void> _showNotification(String title, String body) async {
+    const androidDetails = AndroidNotificationDetails(
+      'sms_channel',
+      'SMS Alerts',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+
+    const notificationDetails = NotificationDetails(android: androidDetails);
+
+    await notificationsPlugin.show(
+      id: 0,
+      title: title,
+      body: body,
+      notificationDetails: notificationDetails,
+    );
+  }
+
+  // ---------------- PERMISSIONS ----------------
+
+  Future<void> _requestPermissions() async {
+    await Permission.sms.request();
+    await Permission.notification.request();
+  }
+
+  // ---------------- SMS ----------------
+
+  void extractinfo(String msg) {
+    final amountReg =
+        RegExp(r'rs\.?\s?(\d+(\.\d{1,2})?)', caseSensitive: false);
+    final recipientReg = RegExp(r'to ([a-zA-Z ]+)');
+    final dateReg = RegExp(r'on (\d{2}-\d{2}(?:-\d{4})?)');
+    final refNumberReg = RegExp(r'ref (\d+)');
+
+    amount = amountReg.firstMatch(msg)?.group(1);
+    recipient = recipientReg.firstMatch(msg)?.group(1);
+    date = dateReg.firstMatch(msg)?.group(1);
+    refNumber = refNumberReg.firstMatch(msg)?.group(1);
+
+    print('Amount: Rs.$amount');
+    print('Recipient: $recipient');
+    print('Date: $date');
+    print('Ref: $refNumber');
+  }
+
+  void _startListeningForSms() {
+    easySmsReceiver.listenIncomingSms(
+      onNewMessage: (message) async {
+        final messageBody = message.body ?? "";
+
+        if (messageBody.toLowerCase().contains("hdfc")) {
+          setState(() => messageText = messageBody);
+
+          extractinfo(messageBody);
+
+          await _showNotification("Label transaction", messageBody);
+        }
+      },
+    );
+  }
+
+  // ---------------- FIRESTORE ----------------
+
   Future<void> _addtodatabase() async {
     final transaction = <String, dynamic>{
       "message": messageText,
@@ -53,146 +130,37 @@ class _MyHomePageState extends State<MyHomePage> {
       "recipient": recipient,
       "date": date,
       "refNumber": refNumber,
-      "note": noteController.text.isNotEmpty
-          ? noteController.text
-          : null, // Optional field
+      "note": noteController.text.isNotEmpty ? noteController.text : null,
+      "timestamp": FieldValue.serverTimestamp(),
     };
 
     try {
-      final doc = await firestore.collection("transaction").add(transaction);
-      print('DocumentSnapshot added with ID: ${doc.id}');
+      await firestore.collection("transaction").add(transaction);
+      print('Saved to Firestore');
     } catch (e) {
-      print('Error adding document: $e');
+      print('Firestore error: $e');
     }
   }
 
-  Future<void> _initializeNotifications() async {
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings =
-        InitializationSettings(android: androidSettings);
-
-    await notificationsPlugin.initialize(initSettings);
-  }
-
-  Future<void> _requestPermissions() async {
-    var smsStatus = await Permission.sms.request();
-    var notificationStatus = await Permission.notification.request();
-
-    if (!smsStatus.isGranted) {
-      print('SMS permission denied');
-    }
-    if (!notificationStatus.isGranted) {
-      print('Notification permission denied');
-    }
-  }
-
-  void extractinfo(String msg) async {
-    // Regular expressions to extract data
-    RegExp amountReg = RegExp(r'rs\.(\d+(\.\d{1,2})?)', caseSensitive: false);
-    RegExp recipientReg = RegExp(r'to ([a-z ]+)');
-    RegExp dateReg = RegExp(r'on (\d{2}-\d{2}(?:-\d{4})?)');
-    RegExp refNumberReg = RegExp(r'ref (\d+)');
-
-// Extracting data
-    amount = amountReg.firstMatch(msg)?.group(1);
-    recipient = recipientReg.firstMatch(msg)?.group(1);
-    date = dateReg.firstMatch(msg)?.group(1);
-    refNumber = refNumberReg.firstMatch(msg)?.group(1);
-    // Printing extracted data
-    print('Amount: Rs.$amount');
-    print('Recipient: $recipient');
-    print('Date: $date');
-    print('Reference Number: $refNumber');
-  }
-
-  void _startListeningForSms() {
-    easySmsReceiver.listenIncomingSms(onNewMessage: (message) {
-      String messageBody = message.body ?? "No content";
-
-      if (messageBody.contains("HDFC")) {
-        setState(() {
-          messageText = messageBody.toLowerCase();
-        });
-        extractinfo(messageText);
-
-        _showNotification("Yo put a label to this shiz pls", messageBody);
-      } else {
-        print('Non-HDFC message received: $messageBody');
-      }
-    });
-  }
-
-  Future<void> _showNotification(String title, String body) async {
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-      'sms_channel',
-      'SMS Notifications',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
-    const NotificationDetails notificationDetails =
-        NotificationDetails(android: androidDetails);
-
-    await notificationsPlugin.show(0, title, body, notificationDetails);
-  }
-
-  Future<void> _showDeleteDialog(int index) async {
-    return showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Button'),
-          content:
-              Text('Are you sure you want to delete "${buttonnames[index]}"?'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  buttonnames.removeAt(index);
-                });
-                Navigator.of(context).pop();
-              },
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // ---------------- UI ----------------
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text("SMS Transaction Logger")),
       floatingActionButton: FloatingActionButton(
-        child: const Text("Add Label"),
-        onPressed: () {
-          addLabelDialog();
-        },
+        child: const Text("Add"),
+        onPressed: () => addLabelDialog(),
       ),
-      appBar: AppBar(title: const Text("SMS Receiver")),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          Text(label, style: const TextStyle(fontSize: 18)),
+          const SizedBox(height: 10),
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 18),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             child: Text(
               messageText,
-              style: const TextStyle(fontSize: 18),
               textAlign: TextAlign.center,
             ),
           ),
@@ -204,20 +172,11 @@ class _MyHomePageState extends State<MyHomePage> {
               itemCount: buttonnames.length,
               itemBuilder: (context, index) {
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: GestureDetector(
-                    onLongPress: () {
-                      _showDeleteDialog(index);
-                    },
-                    child: ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          label = buttonnames[index];
-                        });
-                        print('Button ${buttonnames[index]} pressed');
-                      },
-                      child: Text(buttonnames[index]),
-                    ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: ElevatedButton(
+                    onLongPress: () => _showDeleteDialog(index),
+                    onPressed: () => setState(() => label = buttonnames[index]),
+                    child: Text(buttonnames[index]),
                   ),
                 );
               },
@@ -225,39 +184,50 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
           const SizedBox(height: 20),
           Padding(
-            padding: const EdgeInsets.all(40.0),
+            padding: const EdgeInsets.all(16),
             child: TextField(
-              controller: noteController, // Note input field
+              controller: noteController,
               decoration: const InputDecoration(
-                labelText: "Add a Note",
+                labelText: "Add Note",
                 border: OutlineInputBorder(),
               ),
             ),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () async {
               if (messageText != "Waiting for SMS...") {
                 await _addtodatabase();
                 setState(() {
-                  messageText = "Submitted to Database!";
+                  messageText = "Saved!";
                   label = "";
                 });
                 noteController.clear();
-              } else {
-                setState(() {
-                  messageText = "Cannot submit without SMS";
-                });
               }
-              Future.delayed(const Duration(seconds: 2), () {
-                setState(() {
-                  label = "";
-                  messageText = "Waiting for SMS...";
-                });
-              });
             },
             child: const Text("Submit"),
-          ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showDeleteDialog(int index) async {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete'),
+        content: Text('Delete "${buttonnames[index]}" ?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () {
+                setState(() => buttonnames.removeAt(index));
+                Navigator.pop(context);
+              },
+              child: const Text('Delete')),
         ],
       ),
     );
@@ -265,38 +235,27 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<String?> addLabelDialog() async {
     String? label;
+
     return showDialog<String>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Enter Label'),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(
-                  onChanged: (value) {
-                    label = value;
-                  },
-                  decoration: const InputDecoration(hintText: "Label"),
-                ),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  if (label != null && label!.isNotEmpty) {
-                    buttonnames.add(label!);
-                  }
-                });
-                Navigator.of(context).pop(label);
-              },
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
+      builder: (context) => AlertDialog(
+        title: const Text('Add Label'),
+        content: TextField(
+          onChanged: (v) => label = v,
+          decoration: const InputDecoration(hintText: "Label"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (label != null && label!.isNotEmpty) {
+                setState(() => buttonnames.add(label!));
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('OK'),
+          )
+        ],
+      ),
     );
   }
 }
